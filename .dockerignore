@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+docs/
+*.md
+CONTRIBUTING.md
+LICENSE
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Development
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# Workspace (not needed in image)
+workspace/
+sessions/
+backups/
+
+# Environment
+.env
+.env.*
+.env.example
+
+# Temporary
+tmp/
+temp/
+*.tmp
+*.log
+
+# Tests
+test_*.py
+*_test.py
+tests/

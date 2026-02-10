@@ -1,0 +1,84 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+.venv
+
+# PyCharm
+.idea/
+
+# VSCode
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Sessions and data (runtime generated)
+sessions/*.pkl
+sessions/*.ogg
+sessions/*.wav
+sessions/*.mp3
+sessions/voice_*
+
+# Backups (large files)
+backups/*.tar.gz
+backups/*.zip
+
+# Workspace (user projects, should not be in git)
+workspace/*
+!workspace/.gitkeep
+
+# Docker
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# OS
+.DS_Store
+Thumbs.db
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Local development files (notes, experiments, drafts)
+local/
+
+# Claude credentials - NEVER commit
+.claude/credentials.json
+**/credentials.json
+
+# Claude credentials directory - NEVER commit
+.claude/
+*.credentials.json

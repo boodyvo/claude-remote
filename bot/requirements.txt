@@ -1,0 +1,11 @@
+# Telegram Bot Framework
+python-telegram-bot==21.9
+
+# Deepgram SDK for transcription
+deepgram-sdk==3.0.0
+
+# Environment variable management
+python-dotenv==1.0.0
+
+# HTTP requests
+requests==2.31.0

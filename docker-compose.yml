@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # ==================================================
+  # Telegram Bot Service - Voice Control Interface
+  # ==================================================
+  telegram-bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: telegram-bot
+    working_dir: /app
+
+    # Environment variables (injected by Coolify or .env file)
+    # NOTE: ANTHROPIC_API_KEY is NOT needed - using Claude subscription via 'claude login'
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:?TELEGRAM_TOKEN is required}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:?DEEPGRAM_API_KEY is required}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - ALLOWED_USER_IDS=${ALLOWED_USER_IDS:-}
+      - BOT_MODE=${BOT_MODE:-polling}
+      - SESSIONS_DIR=${SESSIONS_DIR:-./sessions}
+
+    volumes:
+      - ./bot:/app                         # Bot source code
+      - ./sessions:/app/sessions           # Session persistence
+      - workspace:/workspace               # Shared workspace
+      - claude-config:/root/.claude        # Claude Code config
+
+    # Health check for monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import sys; sys.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    restart: unless-stopped
+
+    networks:
+      - claude-network
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================================================
+  # Web Terminal Service - Browser-based Claude Code
+  # ==================================================
+  claudebox-web:
+    image: koogle/claudebox:latest
+    container_name: claudebox-web
+
+    # NOTE: ANTHROPIC_API_KEY is NOT needed - using Claude subscription via 'claude login'
+    environment:
+      - BASIC_AUTH_USER=${BASIC_AUTH_USER:-admin}
+      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS:-}
+
+    volumes:
+      - workspace:/workspace               # Shared workspace
+      - claude-config:/root/.claude        # Shared Claude config
+
+    # Expose port 3000 for web UI
+    ports:
+      - "3000:3000"
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    restart: unless-stopped
+
+    networks:
+      - claude-network
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ==================================================
+# Named Volumes - Persistent Storage
+# ==================================================
+volumes:
+  # Shared workspace for all coding projects
+  workspace:
+    driver: local
+
+  # Claude Code configuration and sessions
+  claude-config:
+    driver: local
+
+# ==================================================
+# Networks - Service Communication
+# ==================================================
+networks:
+  # Internal network for service communication
+  claude-network:
+    driver: bridge
