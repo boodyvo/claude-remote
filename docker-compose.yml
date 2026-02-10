@@ -47,46 +47,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ==================================================
-  # Web Terminal Service - Browser-based Claude Code
-  # ==================================================
-  claudebox-web:
-    image: koogle/claudebox:latest
-    container_name: claudebox-web
-
-    # NOTE: ANTHROPIC_API_KEY is NOT needed - using Claude subscription via 'claude login'
-    environment:
-      - BASIC_AUTH_USER=${BASIC_AUTH_USER:-admin}
-      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS:-}
-
-    volumes:
-      - workspace:/workspace               # Shared workspace
-      - claude-config:/root/.claude        # Shared Claude config
-
-    # Expose port 3000 for web UI
-    ports:
-      - "3000:3000"
-
-    # Health check
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-    restart: unless-stopped
-
-    networks:
-      - claude-network
-
-    # Logging configuration
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
 # ==================================================
 # Named Volumes - Persistent Storage
 # ==================================================
