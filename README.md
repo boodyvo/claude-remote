@@ -12,10 +12,11 @@ Remote Claude Code execution with voice control via Telegram bot, featuring pers
 - **💬 Text Commands**: Full support for text-based interactions
 - **🤖 Claude Code Integration**: Execute coding tasks via Claude Code headless mode
 - **📱 Mobile-First**: Optimized for mobile Telegram app usage
-- **💻 Web UI**: Browser-based terminal access via koogle/claudebox
+- **💻 Web UI**: Browser-based file manager for workspace access
 - **💾 Persistent Sessions**: Conversation history maintained across restarts
 - **✅ Approval Workflow**: Review and approve/reject changes before applying
 - **📝 Git Integration**: View diffs, check status, commit changes
+- **📁 File Browser**: Web-based file management with syntax highlighting
 - **🔒 Secure**: HTTPS via Let's Encrypt, user authorization, API key encryption
 
 ## 📋 Prerequisites

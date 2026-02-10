@@ -1,0 +1,52 @@
+{
+  "port": 80,
+  "baseURL": "",
+  "address": "",
+  "log": "stdout",
+  "database": "/database/filebrowser.db",
+  "root": "/srv",
+  "noAuth": false,
+  "signup": false,
+  "createUserDir": false,
+  "userHomeBasePath": "",
+  "defaults": {
+    "scope": "/srv",
+    "locale": "en",
+    "viewMode": "list",
+    "singleClick": false,
+    "sorting": {
+      "by": "name",
+      "asc": true
+    },
+    "perm": {
+      "admin": false,
+      "execute": false,
+      "create": false,
+      "rename": false,
+      "modify": false,
+      "delete": false,
+      "share": false,
+      "download": true
+    },
+    "commands": [],
+    "hideDotfiles": false,
+    "dateFormat": false
+  },
+  "authMethod": "password",
+  "authHook": "",
+  "recaptcha": {
+    "host": "https://www.google.com",
+    "key": "",
+    "secret": ""
+  },
+  "signup": false,
+  "shell": [],
+  "branding": {
+    "name": "Claude Workspace Files",
+    "disableExternal": false,
+    "disableUsedPercentage": false,
+    "files": "",
+    "theme": "",
+    "color": ""
+  }
+}

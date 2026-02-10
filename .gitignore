@@ -48,6 +48,11 @@ sessions/*.wav
 sessions/*.mp3
 sessions/voice_*
 
+# File Browser data
+filebrowser.db
+filebrowser.db-shm
+filebrowser.db-wal
+
 # Backups (large files)
 backups/*.tar.gz
 backups/*.zip

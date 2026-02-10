@@ -47,6 +47,47 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ==================================================
+  # File Browser - Web-based File Manager
+  # ==================================================
+  file-browser:
+    image: filebrowser/filebrowser:s6
+    container_name: file-browser
+
+    environment:
+      - PUID=0        # Run as root to match workspace permissions
+      - PGID=0
+      - FB_NOAUTH=false
+      - FB_DATABASE=/database/filebrowser.db
+      - FB_ROOT=/srv
+      - FB_LOG=stdout
+
+    volumes:
+      - workspace:/srv:ro                        # Read-only workspace access
+      - ./filebrowser.db:/database/filebrowser.db
+      - ./filebrowser-config.json:/.filebrowser.json:ro
+
+    ports:
+      - "8080:80"
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    restart: unless-stopped
+
+    networks:
+      - claude-network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 # ==================================================
 # Named Volumes - Persistent Storage
 # ==================================================
