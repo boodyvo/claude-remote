@@ -1,0 +1,9 @@
+# Docker Compose override for local development
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.local.yml up
+
+version: '3.8'
+
+services:
+  file-browser:
+    ports:
+      - "8080:80"  # Expose File Browser UI for local access

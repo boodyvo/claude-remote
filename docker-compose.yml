@@ -67,8 +67,9 @@ services:
       - ./filebrowser.db:/database/filebrowser.db
       - ./filebrowser-config.json:/.filebrowser.json:ro
 
-    ports:
-      - "8080:80"
+    # Port exposure removed for Coolify deployment
+    # Coolify's Traefik proxy handles routing via domain configuration
+    # For local testing: docker-compose -f docker-compose.yml -f docker-compose.local.yml up
 
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
