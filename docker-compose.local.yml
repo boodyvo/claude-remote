@@ -4,6 +4,13 @@
 version: '3.8'
 
 services:
+  telegram-bot:
+    volumes:
+      - ./bot:/app                         # Mount source code for live editing
+      - ./sessions:/app/sessions           # Use local sessions directory
+
   file-browser:
+    volumes:
+      - ./filebrowser.db:/database/filebrowser.db  # Use local database file
     ports:
       - "8080:80"  # Expose File Browser UI for local access

@@ -22,8 +22,8 @@ services:
       - SESSIONS_DIR=${SESSIONS_DIR:-./sessions}
 
     volumes:
-      - ./bot:/app                         # Bot source code
-      - ./sessions:/app/sessions           # Session persistence
+      # Source code is built into image, not mounted for production
+      - sessions:/app/sessions             # Session persistence (named volume)
       - workspace:/workspace               # Shared workspace
       - claude-config:/root/.claude        # Claude Code config
 
@@ -64,7 +64,7 @@ services:
 
     volumes:
       - workspace:/srv:ro                        # Read-only workspace access
-      - ./filebrowser.db:/database/filebrowser.db
+      - filebrowser-db:/database                 # Database persistence (named volume)
       - ./filebrowser-config.json:/.filebrowser.json:ro
 
     # Port exposure removed for Coolify deployment
@@ -99,6 +99,14 @@ volumes:
 
   # Claude Code configuration and sessions
   claude-config:
+    driver: local
+
+  # Telegram bot sessions
+  sessions:
+    driver: local
+
+  # File Browser database
+  filebrowser-db:
     driver: local
 
 # ==================================================
