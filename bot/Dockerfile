@@ -62,8 +62,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/sessions /workspace
+# Create non-root user for Claude Code (--dangerously-skip-permissions blocked for root)
+RUN useradd -m -u 1000 -s /bin/bash botuser && \
+    mkdir -p /app/sessions /workspace && \
+    chown -R botuser:botuser /app /workspace
+
+USER botuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

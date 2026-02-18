@@ -25,7 +25,7 @@ services:
       # Source code is built into image, not mounted for production
       - sessions:/app/sessions             # Session persistence (named volume)
       - workspace:/workspace               # Shared workspace
-      - claude-home:/root                  # Persists ~/.claude.json (MCP) and ~/.claude/ (credentials)
+      - claude-home:/home/botuser           # Persists ~/.claude.json (MCP) and ~/.claude/ (credentials)
 
     # Health check for monitoring
     healthcheck:
