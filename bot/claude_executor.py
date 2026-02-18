@@ -5,10 +5,11 @@ Handles subprocess execution, output parsing, and error handling.
 """
 
 import subprocess
+import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Callable, Awaitable
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ CLAUDE_EXECUTABLE = "claude"
 DEFAULT_WORKSPACE = Path("/workspace")
 
 # Command timeout in seconds
-DEFAULT_TIMEOUT = 120  # 2 minutes
+DEFAULT_TIMEOUT = 3600  # 1 hour - complex tasks (multi-file projects) can take a long time
 
 # Claude session directory
 CLAUDE_SESSIONS_DIR = Path("/root/.claude/projects")
@@ -222,6 +223,143 @@ class ClaudeExecutor:
             success=is_success,
             output=output,
             session_id=session_id,
+            cost_usd=cost_usd,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            duration_ms=duration_ms,
+            model=model,
+            tools_used=list(tools_used),
+            raw_events=events
+        )
+
+    async def execute_streaming(
+        self,
+        prompt: str,
+        session_id: Optional[str] = None,
+        on_progress: Optional[Callable[[str], Awaitable[None]]] = None
+    ) -> ClaudeResponse:
+        """
+        Execute Claude Code asynchronously with streaming progress updates.
+
+        Args:
+            prompt: The user's prompt/request
+            session_id: Optional session ID to resume conversation
+            on_progress: Async callback called with progress text as events arrive
+
+        Returns:
+            ClaudeResponse object with execution results
+        """
+        cmd = self._build_command(prompt, session_id)
+        logger.info(f"Executing Claude (streaming) for session: {session_id or 'new'}")
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(self.workspace)
+        )
+
+        events = []
+        output_parts = []
+        result_session_id = None
+        cost_usd = 0.0
+        input_tokens = 0
+        output_tokens = 0
+        duration_ms = 0
+        model = None
+        tools_used = set()
+        last_progress_time = asyncio.get_event_loop().time()
+        tool_call_count = 0
+
+        try:
+            async def read_stdout():
+                nonlocal result_session_id, cost_usd, input_tokens, output_tokens
+                nonlocal duration_ms, model, last_progress_time, tool_call_count
+
+                async for raw_line in proc.stdout:
+                    line = raw_line.decode('utf-8', errors='replace').strip()
+                    if not line:
+                        continue
+
+                    try:
+                        event = json.loads(line)
+                        events.append(event)
+                        event_type = event.get('type')
+
+                        if event_type == 'system' and event.get('subtype') == 'init':
+                            result_session_id = event.get('session_id')
+                            model = event.get('model')
+
+                        elif event_type == 'assistant':
+                            message = event.get('message', {})
+                            content = message.get('content', [])
+                            for block in content:
+                                if block.get('type') == 'text':
+                                    output_parts.append(block.get('text', ''))
+                                elif block.get('type') == 'tool_use':
+                                    tool_name = block.get('name', 'unknown')
+                                    tools_used.add(tool_name)
+                                    tool_call_count += 1
+                                    # Send progress update for each tool call
+                                    if on_progress:
+                                        now = asyncio.get_event_loop().time()
+                                        elapsed = int(now - last_progress_time + 0.5)
+                                        # Build tool display name
+                                        tool_input = block.get('input', {})
+                                        detail = ''
+                                        if tool_name in ('Write', 'Edit', 'Create') and 'file_path' in tool_input:
+                                            detail = f": `{tool_input['file_path'].split('/')[-1]}`"
+                                        elif tool_name == 'Bash' and 'command' in tool_input:
+                                            detail = f": `{tool_input['command'][:40]}`"
+                                        elif tool_name == 'Read' and 'file_path' in tool_input:
+                                            detail = f": `{tool_input['file_path'].split('/')[-1]}`"
+                                        await on_progress(
+                                            f"🔧 `{tool_name}`{detail} (step {tool_call_count})"
+                                        )
+
+                        elif event_type == 'result':
+                            if not result_session_id:
+                                result_session_id = event.get('session_id')
+                            cost_usd = event.get('total_cost_usd', 0.0)
+                            duration_ms = event.get('duration_ms', 0)
+                            usage = event.get('usage', {})
+                            input_tokens = usage.get('input_tokens', 0)
+                            output_tokens = usage.get('output_tokens', 0)
+
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse JSON line: {line[:100]}")
+
+            await asyncio.wait_for(read_stdout(), timeout=self.timeout)
+            await proc.wait()
+
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            logger.error(f"Claude streaming command timeout after {self.timeout}s")
+            return ClaudeResponse(
+                success=False,
+                output=''.join(output_parts).strip(),
+                error=f"Command timeout after {self.timeout} seconds"
+            )
+
+        output = ''.join(output_parts).strip()
+        is_success = proc.returncode == 0 and (output or tools_used)
+
+        if not output and tools_used:
+            output = "(Claude completed task with no text output)"
+
+        if proc.returncode != 0 and not output:
+            stderr = (await proc.stderr.read()).decode('utf-8', errors='replace').strip()
+            return ClaudeResponse(
+                success=False,
+                output="",
+                error=stderr or "Unknown error"
+            )
+
+        return ClaudeResponse(
+            success=is_success,
+            output=output,
+            session_id=result_session_id,
             cost_usd=cost_usd,
             input_tokens=input_tokens,
             output_tokens=output_tokens,

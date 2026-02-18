@@ -842,9 +842,30 @@ async def handle_text(update: Update, context) -> None:
     )
 
     try:
-        # Execute with Claude
+        # Progress callback - updates status message with live tool activity
+        last_edit_time = [0.0]
+        progress_lines = []
+
+        async def on_progress(line: str):
+            progress_lines.append(line)
+            # Throttle edits to avoid Telegram rate limits (max once per 2s)
+            import time
+            now = time.time()
+            if now - last_edit_time[0] >= 2.0:
+                last_edit_time[0] = now
+                recent = progress_lines[-5:]  # Show last 5 steps
+                body = '\n'.join(recent)
+                try:
+                    await status_msg.edit_text(
+                        f"⏳ **Processing with Claude Code...**\n\n{body}",
+                        parse_mode='Markdown'
+                    )
+                except Exception:
+                    pass  # Ignore edit errors (message unchanged, flood limits)
+
+        # Execute with Claude (streaming)
         logger.info(f"Executing Claude for user {user_id}, session {session_id}, turn {turn_count}")
-        claude_response: ClaudeResponse = claude_executor.execute(text, session_id)
+        claude_response: ClaudeResponse = await claude_executor.execute_streaming(text, session_id, on_progress)
 
         # Store new session ID if created
         if claude_response.session_id:
@@ -1089,9 +1110,32 @@ async def handle_voice(update: Update, context) -> None:
         )
 
         try:
-            # Execute with Claude
+            # Progress callback for voice handler
+            voice_last_edit_time = [0.0]
+            voice_progress_lines = []
+            voice_transcription_header = (
+                f"🎤 **Voice transcribed:**\n_{transcribed_text}_\n\n"
+            )
+
+            async def on_voice_progress(line: str):
+                voice_progress_lines.append(line)
+                import time as _time
+                now = _time.time()
+                if now - voice_last_edit_time[0] >= 2.0:
+                    voice_last_edit_time[0] = now
+                    recent = voice_progress_lines[-5:]
+                    body = '\n'.join(recent)
+                    try:
+                        await status_msg.edit_text(
+                            voice_transcription_header + f"⏳ **Executing with Claude Code...**\n\n{body}",
+                            parse_mode='Markdown'
+                        )
+                    except Exception:
+                        pass
+
+            # Execute with Claude (streaming)
             user_logger.info(f"Executing Claude, session {session_id}, turn {turn_count}")
-            claude_response: ClaudeResponse = claude_executor.execute(transcribed_text, session_id)
+            claude_response: ClaudeResponse = await claude_executor.execute_streaming(transcribed_text, session_id, on_voice_progress)
 
             # Store new session ID if created
             if claude_response.session_id:
