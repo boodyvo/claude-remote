@@ -50,7 +50,7 @@ class ClaudeExecutor:
         self,
         workspace: Path = DEFAULT_WORKSPACE,
         timeout: int = DEFAULT_TIMEOUT,
-        max_turns: int = 10
+        max_turns: int = 100
     ):
         self.workspace = workspace
         self.timeout = timeout
@@ -117,6 +117,7 @@ class ClaudeExecutor:
             "-p", prompt,
             "--output-format", "stream-json",
             "--verbose",
+            "--dangerously-skip-permissions",  # Headless: no interactive prompts
             "--max-turns", str(self.max_turns)
         ]
 
