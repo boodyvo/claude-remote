@@ -25,7 +25,7 @@ services:
       # Source code is built into image, not mounted for production
       - sessions:/app/sessions             # Session persistence (named volume)
       - workspace:/workspace               # Shared workspace
-      - claude-config:/root/.claude        # Claude Code config
+      - claude-home:/root                  # Persists ~/.claude.json (MCP) and ~/.claude/ (credentials)
 
     # Health check for monitoring
     healthcheck:
@@ -97,8 +97,8 @@ volumes:
   workspace:
     driver: local
 
-  # Claude Code configuration and sessions
-  claude-config:
+  # Claude home dir - persists credentials + MCP config across redeploys
+  claude-home:
     driver: local
 
   # Telegram bot sessions
