@@ -67,11 +67,22 @@ RUN useradd -m -u 1000 -s /bin/bash botuser && \
     mkdir -p /app/sessions /workspace && \
     chown -R botuser:botuser /app /workspace
 
-USER botuser
+# Startup script: fixes volume mount permissions then drops to botuser
+RUN printf '#!/bin/bash\n\
+# Fix home dir permissions (volume mount may be root-owned)\n\
+chown -R botuser:botuser /home/botuser 2>/dev/null || true\n\
+# Drop to botuser and run bot\n\
+exec gosu botuser python /app/bot.py\n' > /usr/local/bin/start.sh && \
+    chmod +x /usr/local/bin/start.sh
+
+# Install gosu for clean privilege dropping
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends gosu && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import sys; sys.exit(0)" || exit 1
 
-# Run bot
-CMD ["python", "bot.py"]
+# Runs as root to fix permissions, then drops to botuser
+CMD ["/usr/local/bin/start.sh"]
