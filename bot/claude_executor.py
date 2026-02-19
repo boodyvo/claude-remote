@@ -262,6 +262,7 @@ class ClaudeExecutor:
 
         events = []
         output_parts = []
+        stderr_parts = []
         result_session_id = None
         cost_usd = 0.0
         input_tokens = 0
@@ -273,6 +274,13 @@ class ClaudeExecutor:
         tool_call_count = 0
 
         try:
+            async def read_stderr():
+                async for raw_line in proc.stderr:
+                    line = raw_line.decode('utf-8', errors='replace').strip()
+                    if line:
+                        stderr_parts.append(line)
+                        logger.debug(f"Claude stderr: {line}")
+
             async def read_stdout():
                 nonlocal result_session_id, cost_usd, input_tokens, output_tokens
                 nonlocal duration_ms, model, last_progress_time, tool_call_count
@@ -330,7 +338,10 @@ class ClaudeExecutor:
                     except json.JSONDecodeError:
                         logger.warning(f"Failed to parse JSON line: {line[:100]}")
 
-            await asyncio.wait_for(read_stdout(), timeout=self.timeout)
+            await asyncio.wait_for(
+                asyncio.gather(read_stdout(), read_stderr()),
+                timeout=self.timeout
+            )
             await proc.wait()
 
         except asyncio.TimeoutError:
@@ -344,17 +355,20 @@ class ClaudeExecutor:
             )
 
         output = ''.join(output_parts).strip()
+        stderr = '\n'.join(stderr_parts).strip()
+
+        logger.info(f"Claude exited with code {proc.returncode}, stderr={stderr[:200] if stderr else '(none)'}")
+
         is_success = proc.returncode == 0 and (output or tools_used)
 
         if not output and tools_used:
             output = "(Claude completed task with no text output)"
 
         if proc.returncode != 0 and not output:
-            stderr = (await proc.stderr.read()).decode('utf-8', errors='replace').strip()
             return ClaudeResponse(
                 success=False,
                 output="",
-                error=stderr or "Unknown error"
+                error=stderr or f"Claude exited with code {proc.returncode}"
             )
 
         return ClaudeResponse(
