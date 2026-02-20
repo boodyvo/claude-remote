@@ -77,12 +77,16 @@ USER_DATA_SCHEMA = {
     'last_active': None,            # datetime or None
     'workspace_path': '/workspace', # str
     'last_transcription': None,     # str or None
+    'github_repo': None,            # str: "owner/repo" or None
+    'repo_path': None,              # str: local path to cloned repo
     'preferences': {                # dict
         'auto_compact': True,
         'show_transcription': True,
         'max_turns_before_compact': 20
     }
 }
+
+WORKSPACE_BASE = Path('/workspace')
 
 
 def initialize_user_data(context):
@@ -863,9 +867,20 @@ async def handle_text(update: Update, context) -> None:
                 except Exception:
                     pass  # Ignore edit errors (message unchanged, flood limits)
 
+        # Inject repo context into prompt if a repo is linked
+        prompt = text
+        github_repo = context.user_data.get('github_repo')
+        repo_path = context.user_data.get('repo_path')
+        if github_repo and repo_path:
+            prompt = (
+                f"[Context: Working on GitHub repo `{github_repo}` at `{repo_path}`. "
+                f"Use this as the working directory for all file operations, git commands, etc.]\n\n"
+                f"{text}"
+            )
+
         # Execute with Claude (streaming)
         logger.info(f"Executing Claude for user {user_id}, session {session_id}, turn {turn_count}")
-        claude_response: ClaudeResponse = await claude_executor.execute_streaming(text, session_id, on_progress)
+        claude_response: ClaudeResponse = await claude_executor.execute_streaming(prompt, session_id, on_progress)
 
         # Store new session ID if created
         if claude_response.session_id:
@@ -1133,9 +1148,20 @@ async def handle_voice(update: Update, context) -> None:
                     except Exception:
                         pass
 
+            # Inject repo context into prompt if a repo is linked
+            voice_prompt = transcribed_text
+            github_repo = context.user_data.get('github_repo')
+            repo_path = context.user_data.get('repo_path')
+            if github_repo and repo_path:
+                voice_prompt = (
+                    f"[Context: Working on GitHub repo `{github_repo}` at `{repo_path}`. "
+                    f"Use this as the working directory for all file operations, git commands, etc.]\n\n"
+                    f"{transcribed_text}"
+                )
+
             # Execute with Claude (streaming)
             user_logger.info(f"Executing Claude, session {session_id}, turn {turn_count}")
-            claude_response: ClaudeResponse = await claude_executor.execute_streaming(transcribed_text, session_id, on_voice_progress)
+            claude_response: ClaudeResponse = await claude_executor.execute_streaming(voice_prompt, session_id, on_voice_progress)
 
             # Store new session ID if created
             if claude_response.session_id:
@@ -1266,6 +1292,131 @@ async def handle_voice(update: Update, context) -> None:
             os.remove(ogg_path)
         if wav_path and os.path.exists(wav_path):
             os.remove(wav_path)
+
+
+async def handle_repo(update: Update, context) -> None:
+    """
+    Link a GitHub repository to the current session.
+    Usage:
+      /repo owner/repo       - clone/pull repo and link to session
+      /repo                  - show current linked repo
+      /repo clear            - unlink repo from session
+    """
+    user_id = update.effective_user.id
+    if not check_authorization(user_id):
+        await update.message.reply_text("⛔ Unauthorized")
+        return
+
+    initialize_user_data(context)
+    args = context.args
+
+    # Show current repo
+    if not args:
+        repo = context.user_data.get('github_repo')
+        repo_path = context.user_data.get('repo_path')
+        if repo:
+            await update.message.reply_text(
+                f"📁 **Linked repository:** `{repo}`\n"
+                f"📂 **Local path:** `{repo_path}`\n\n"
+                f"Use `/repo owner/repo` to switch or `/repo clear` to unlink.",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "No repository linked.\n\n"
+                "Usage: `/repo owner/repo`\nExample: `/repo torvalds/linux`",
+                parse_mode='Markdown'
+            )
+        return
+
+    # Clear repo
+    if args[0].lower() == 'clear':
+        old = context.user_data.get('github_repo', 'none')
+        context.user_data['github_repo'] = None
+        context.user_data['repo_path'] = None
+        context.user_data['claude_session_id'] = None  # new session for new context
+        await update.message.reply_text(
+            f"✅ Unlinked repository `{old}`.\nSession reset.",
+            parse_mode='Markdown'
+        )
+        return
+
+    # Link repo: clone or pull
+    repo_slug = args[0].strip('/')
+    if '/' not in repo_slug:
+        await update.message.reply_text(
+            "❌ Invalid format. Use `owner/repo`\nExample: `/repo torvalds/linux`",
+            parse_mode='Markdown'
+        )
+        return
+
+    repo_name = repo_slug.split('/')[-1]
+    repo_path = WORKSPACE_BASE / repo_name
+    github_token = os.environ.get('GITHUB_TOKEN', '')
+
+    if github_token:
+        clone_url = f"https://{github_token}@github.com/{repo_slug}.git"
+    else:
+        clone_url = f"https://github.com/{repo_slug}.git"
+
+    status_msg = await update.message.reply_text(
+        f"⏳ Setting up repository `{repo_slug}`...",
+        parse_mode='Markdown'
+    )
+
+    try:
+        if repo_path.exists():
+            # Pull latest
+            result = subprocess.run(
+                ['git', 'pull'],
+                cwd=str(repo_path),
+                capture_output=True, text=True, timeout=60
+            )
+            action = "updated"
+            detail = result.stdout.strip() or result.stderr.strip()
+        else:
+            # Clone
+            result = subprocess.run(
+                ['git', 'clone', clone_url, str(repo_path)],
+                capture_output=True, text=True, timeout=120
+            )
+            action = "cloned"
+            detail = result.stdout.strip() or result.stderr.strip()
+
+        if result.returncode != 0:
+            await status_msg.edit_text(
+                f"❌ Failed to {action.replace('d','')}: `{repo_slug}`\n\n```\n{detail[:500]}\n```",
+                parse_mode='Markdown'
+            )
+            return
+
+        # Link repo to session and reset session for fresh context
+        context.user_data['github_repo'] = repo_slug
+        context.user_data['repo_path'] = str(repo_path)
+        context.user_data['claude_session_id'] = None  # fresh session with repo context
+
+        # Get branch info
+        branch_result = subprocess.run(
+            ['git', 'branch', '--show-current'],
+            cwd=str(repo_path), capture_output=True, text=True
+        )
+        branch = branch_result.stdout.strip() or 'unknown'
+
+        await status_msg.edit_text(
+            f"✅ Repository `{repo_slug}` {action}!\n\n"
+            f"📂 **Path:** `{repo_path}`\n"
+            f"🌿 **Branch:** `{branch}`\n\n"
+            f"Session reset. Claude will now work in this repository.\n"
+            f"You can ask me to: create branches, make changes, push, create PRs, etc.",
+            parse_mode='Markdown'
+        )
+        logger.info(f"User {user_id} linked repo {repo_slug} at {repo_path}")
+
+    except subprocess.TimeoutExpired:
+        await status_msg.edit_text(f"❌ Timeout cloning `{repo_slug}`. Repository may be too large.")
+    except Exception as e:
+        logger.error(f"Repo setup failed: {e}", exc_info=True)
+        await status_msg.edit_text(f"❌ Error: {str(e)}")
 
 
 async def handle_gitinit(update: Update, context) -> None:
@@ -1561,6 +1712,9 @@ def main():
     app.add_handler(CommandHandler("clear", handle_clear))
     app.add_handler(CommandHandler("compact", handle_compact))
     app.add_handler(CommandHandler("workspace", handle_workspace))
+
+    # Register repo command handler
+    app.add_handler(CommandHandler("repo", handle_repo))
 
     # Register git command handlers
     app.add_handler(CommandHandler("gitinit", handle_gitinit))

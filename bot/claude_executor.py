@@ -23,8 +23,9 @@ DEFAULT_WORKSPACE = Path("/workspace")
 # Command timeout in seconds
 DEFAULT_TIMEOUT = 3600  # 1 hour - complex tasks (multi-file projects) can take a long time
 
-# Claude session directory
-CLAUDE_SESSIONS_DIR = Path("/root/.claude/projects")
+# Claude session directory (use HOME to support both root and non-root users)
+import os
+CLAUDE_SESSIONS_DIR = Path(os.environ.get("HOME", "/root")) / ".claude" / "projects"
 
 
 @dataclass
@@ -252,6 +253,14 @@ class ClaudeExecutor:
         """
         cmd = self._build_command(prompt, session_id)
         logger.info(f"Executing Claude (streaming) for session: {session_id or 'new'}")
+
+        # Quick check: if session_id given, verify it exists before running
+        if session_id:
+            session_path = CLAUDE_SESSIONS_DIR / session_id
+            if not session_path.exists():
+                logger.warning(f"Session {session_id} not found locally, starting new session")
+                session_id = None
+                cmd = self._build_command(prompt, None)
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,

@@ -20,12 +20,18 @@ services:
       - ALLOWED_USER_IDS=${ALLOWED_USER_IDS:-}
       - BOT_MODE=${BOT_MODE:-polling}
       - SESSIONS_DIR=${SESSIONS_DIR:-./sessions}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
 
     volumes:
-      # Source code is built into image, not mounted for production
-      - sessions:/app/sessions             # Session persistence (named volume)
-      - workspace:/workspace               # Shared workspace
-      - claude-home:/home/botuser           # Persists ~/.claude.json (MCP) and ~/.claude/ (credentials)
+      # Explicit bind mounts - Coolify won't rename these if host paths exist
+      - type: bind
+        source: /data/claude-remote/sessions
+        target: /app/sessions
+        is_directory: true
+      - type: bind
+        source: /data/claude-remote/claude-home
+        target: /home/botuser
+        is_directory: true
 
     # Health check for monitoring
     healthcheck:
@@ -63,8 +69,15 @@ services:
       - FB_LOG=stdout
 
     volumes:
-      - workspace:/srv:ro                        # Read-only workspace access
-      - filebrowser-db:/database                 # Database persistence (named volume)
+      - type: bind
+        source: /data/claude-remote/claude-home
+        target: /srv
+        read_only: true
+        is_directory: true
+      - type: bind
+        source: /data/claude-remote/filebrowser
+        target: /database
+        is_directory: true
       - ./filebrowser-config.json:/.filebrowser.json:ro
 
     # Port exposure removed for Coolify deployment
@@ -88,26 +101,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-# ==================================================
-# Named Volumes - Persistent Storage
-# ==================================================
-volumes:
-  # Shared workspace for all coding projects
-  workspace:
-    driver: local
-
-  # Claude home dir - persists credentials + MCP config across redeploys
-  claude-home:
-    driver: local
-
-  # Telegram bot sessions
-  sessions:
-    driver: local
-
-  # File Browser database
-  filebrowser-db:
-    driver: local
 
 # ==================================================
 # Networks - Service Communication
